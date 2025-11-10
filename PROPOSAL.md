@@ -1,5 +1,4 @@
 # Micro Weather Station Proposal
-## For Kerala Government Agency
 
 ---
 
