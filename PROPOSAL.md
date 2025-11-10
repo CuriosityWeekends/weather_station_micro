@@ -63,24 +63,36 @@ This document outlines the design and implementation plan for a comprehensive mi
 
 ## Hardware Architecture
 
-### Primary Platform: Raspberry Pi (Recommended Configuration)
+### Primary Platform: Raspberry Pi Pico W (Recommended Configuration)
 
-**Option A: Raspberry Pi 4** (Full-featured solution)
+**Primary Choice: Raspberry Pi Pico W** (Cost-effective microcontroller solution)
+- **Microcontroller**: RP2040 dual-core ARM Cortex-M0+ @ 133MHz
+- **RAM**: 264KB SRAM
+- **Storage**: 2MB Flash
+- **Programming**: MicroPython support (easy to learn and deploy)
+- **Connectivity**: Built-in WiFi (802.11n) for internet connection
+- **Benefits**:
+  - Ultra-low power consumption (ideal for solar/battery operation)
+  - Cost-effective for large-scale deployment
+  - MicroPython enables rapid development and easy maintenance
+  - WiFi built-in for cloud connectivity and remote monitoring
+  - Compact form factor suitable for weather-proof enclosures
+- **Power**: 5V via micro-USB (can run on battery/solar)
+- **Estimated Cost**: ₹500-700 (including GST)
+- **Availability**: Readily available through Indian electronics suppliers
+
+**Alternative: Raspberry Pi 4** (For advanced processing requirements)
 - Processor: ARM Cortex quad-core
-- RAM: 4GB (recommended for government deployment)
-- Benefits: Full Linux OS, easy networking, extensive library support
-- Power: 5V/3A USB-C
-- Estimated Cost: ₹5,500-6,500 (including GST)
-- **Availability**: Readily available through authorized Indian distributors
+- RAM: 4GB
+- Use case: Research labs requiring complex data processing or ML models
+- Cost: ₹5,500-6,500 (8x more expensive)
 
-**Option B: Raspberry Pi Pico W** (Budget solution for pilot deployment)
-- Microcontroller: RP2040 dual-core
-- Benefits: Low power, WiFi built-in, cost-effective
-- Power: 5V via micro-USB
-- Estimated Cost: ₹500-700
-- **Availability**: Available through Indian electronics suppliers
-
-**Recommendation**: Raspberry Pi 4 for government research and monitoring applications due to easier development, debugging, data processing capabilities, and long-term support requirements.
+**Recommendation**: Raspberry Pi Pico W is the optimal choice for government deployment due to:
+1. 90% cost reduction compared to Raspberry Pi 4
+2. Lower power consumption (suitable for remote locations with solar power)
+3. MicroPython simplifies development and maintenance
+4. Built-in WiFi enables cloud connectivity
+5. Proven reliability in IoT applications
 
 ### Sensor Suite
 
@@ -150,6 +162,7 @@ This document outlines the design and implementation plan for a comprehensive mi
 ## System Architecture Overview
 
 ```mermaid
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'36px'}}}%%
 graph TB
     subgraph "Hardware Layer"
         BME280[BME280 Sensor<br/>Temp/Humidity/Pressure<br/>I2C]
@@ -160,37 +173,36 @@ graph TB
         SD[MicroSD Card<br/>Local Storage]
     end
 
-    subgraph "Raspberry Pi 4"
+    subgraph "Raspberry Pi Pico W"
         subgraph "Data Acquisition Layer"
-            SENSOR_MGR[sensor_manager.py<br/>Sensor Drivers & Polling]
+            SENSOR_MGR[sensor_manager.py<br/>MicroPython Drivers<br/>GPIO/I2C/ADC]
         end
 
         subgraph "Data Processing Layer"
-            DATA_MGR[data_manager.py<br/>Validation, Calculations<br/>Storage Management]
-            DB[(SQLite DB<br/>Time Series Data)]
+            DATA_MGR[data_manager.py<br/>Validation, Calculations<br/>JSON Storage]
+            DB[(JSON Files<br/>Time Series Data)]
         end
 
         subgraph "Presentation Layer"
             DISPLAY_MGR[display_manager.py<br/>OLED Controller]
-            WEB_SERVER[web_server.py<br/>Flask/FastAPI<br/>REST API]
-            CLOUD_UP[cloud_uploader.py<br/>ThingSpeak Client<br/>MQTT Publisher]
+            CLOUD_UP[cloud_uploader.py<br/>HTTP REST Client<br/>WiFi Manager]
         end
 
         subgraph "System Layer"
-            SYS_MGR[system_manager.py<br/>Health Monitoring<br/>Service Management]
-            CONFIG[config.yaml<br/>Settings & Params]
+            MAIN[main.py<br/>Boot Script<br/>Watchdog Timer]
+            CONFIG[config.json<br/>Settings & Params]
         end
     end
 
     subgraph "User Interfaces"
         LOCAL_DISPLAY[Local Display<br/>Real-time Readings]
-        WEB_DASH[Web Dashboard<br/>Browser Access<br/>Charts & History]
-        MOBILE[Mobile Device<br/>Responsive UI]
+        WEB_DASH[Cloud Dashboard<br/>ThingSpeak/Custom<br/>Data Visualization]
+        MOBILE[Mobile/Desktop<br/>API Access]
     end
 
     subgraph "Cloud Services"
         THINGSPEAK[ThingSpeak<br/>Data Visualization<br/>Public API]
-        MQTT_BROKER[MQTT Broker<br/>Real-time Streaming]
+        GOV_API[Government API<br/>Custom REST Endpoint]
     end
 
     subgraph "Data Export"
@@ -216,26 +228,25 @@ graph TB
     DISPLAY_MGR -->|Render| OLED
     OLED -->|Visual| LOCAL_DISPLAY
 
-    %% Web interface
-    WEB_SERVER -->|HTTP/WebSocket| WEB_DASH
-    WEB_SERVER -->|Responsive| MOBILE
+    %% Cloud interface
+    CLOUD_UP -->|WiFi| WEB_DASH
+    THINGSPEAK -->|API| MOBILE
+    GOV_API -->|API| MOBILE
 
     %% Cloud services
     CLOUD_UP -->|HTTPS POST| THINGSPEAK
-    CLOUD_UP -->|Publish| MQTT_BROKER
+    CLOUD_UP -->|HTTPS POST| GOV_API
 
     %% Data export
-    DATA_MGR -->|Write| CSV_FILES
-    WEB_SERVER -->|Export| JSON_API
+    DATA_MGR -->|Write JSON| CSV_FILES
+    SD -->|Export| JSON_API
 
     %% System management
     CONFIG -.->|Configure| SENSOR_MGR
     CONFIG -.->|Configure| DATA_MGR
-    CONFIG -.->|Configure| WEB_SERVER
     CONFIG -.->|Configure| CLOUD_UP
-    SYS_MGR -.->|Monitor| SENSOR_MGR
-    SYS_MGR -.->|Monitor| WEB_SERVER
-    SYS_MGR -.->|Monitor| CLOUD_UP
+    MAIN -.->|Monitor| SENSOR_MGR
+    MAIN -.->|Monitor| CLOUD_UP
 
     %% Storage
     DB -.->|Backup| SD
@@ -249,50 +260,58 @@ graph TB
     style SENSOR_MGR fill:#c8e6c9
     style DATA_MGR fill:#c8e6c9
     style DISPLAY_MGR fill:#ffecb3
-    style WEB_SERVER fill:#ffecb3
     style CLOUD_UP fill:#ffecb3
-    style SYS_MGR fill:#d1c4e9
+    style MAIN fill:#d1c4e9
     style DB fill:#b3e5fc
     style THINGSPEAK fill:#ffe0b2
+    style GOV_API fill:#ffe0b2
     style WEB_DASH fill:#fff9c4
 ```
 
 ## Software Architecture
 
-### Operating System & Runtime
-- **OS**: Raspberry Pi OS Lite (Debian-based)
-- **Language**: Python 3.10+
-- **Benefits**: Extensive library ecosystem, rapid development
+### Runtime Environment
+- **Platform**: MicroPython on Raspberry Pi Pico W
+- **Language**: MicroPython (Python 3.4+ compatible)
+- **Benefits**:
+  - Lightweight and efficient for microcontroller
+  - Easy to learn and maintain (Python syntax)
+  - Direct hardware access
+  - Active community and extensive documentation
+  - Suitable for government staff training
 
 ### Software Components
 
 #### 1. Data Acquisition Layer
 ```
 sensor_manager.py
-├── BME280 driver (temperature, humidity, pressure)
-├── Anemometer driver (wind speed)
-├── Wind vane driver (wind direction)
-└── Rain gauge driver (precipitation)
+├── BME280 driver (temperature, humidity, pressure via I2C)
+├── Anemometer driver (wind speed via GPIO interrupt)
+├── Wind vane driver (wind direction via ADC)
+└── Rain gauge driver (precipitation via GPIO interrupt)
 ```
 
-**Key Libraries**:
-- `adafruit-circuitpython-bme280`: BME280 interface
-- `RPi.GPIO`: GPIO pin management for wind/rain sensors
-- `smbus2` or `board`: I2C communication
+**Key MicroPython Libraries**:
+- `machine`: Hardware access (I2C, GPIO, ADC, timers)
+- `bme280`: BME280 sensor driver for MicroPython
+- Custom interrupt handlers for wind and rain sensors
+- `network`: WiFi connectivity management
 
 #### 2. Data Processing & Storage
 ```
 data_manager.py
 ├── Data validation & filtering
 ├── Statistical calculations (averages, min/max)
-├── Local SQLite database
-└── CSV export functionality
+├── JSON file storage on flash/SD card
+└── Data buffering for cloud upload
 ```
 
 **Features**:
-- Sampling interval: 1-60 seconds (configurable)
-- Aggregation: 1-minute, 5-minute, hourly, daily summaries
+- Sampling interval: 10-60 seconds (configurable, optimized for microcontroller)
+- Aggregation: 5-minute, hourly, daily summaries
 - Anomaly detection: Filter out sensor errors
+- Circular buffer for memory-efficient storage
+- JSON format for easy cloud API integration
 
 #### 3. Display Controller
 ```
@@ -308,48 +327,41 @@ display_manager.py
 - Page 3: Rainfall (hourly, daily)
 - Page 4: Trends and forecasts
 
-#### 4. Web Interface
+#### 4. Cloud & API Interface
 ```
-web_server.py
-├── Flask/FastAPI web server
-├── RESTful API endpoints
-└── HTML/JavaScript dashboard
+cloud_uploader.py
+├── HTTP client for cloud services
+├── RESTful API data posting
+└── WiFi connection management
 ```
 
 **Features**:
-- Real-time data updates via WebSocket/AJAX
-- Historical data visualization (charts)
-- Data export (CSV, JSON)
-- Configuration interface
-- Responsive design (mobile-friendly)
+- Periodic data upload to cloud platforms (ThingSpeak, custom APIs)
+- JSON payload formatting
+- Retry logic for failed uploads
+- Connection status monitoring
+- Low-bandwidth optimized (suitable for 4G/limited connectivity)
 
-#### 5. Cloud Integration
+#### 5. System Management
 ```
-cloud_uploader.py
-├── ThingSpeak API client
-├── MQTT publisher (optional)
-└── AWS IoT/Azure IoT (advanced)
+main.py (Boot script)
+├── Watchdog timer for auto-restart
+├── Error logging to SD card
+├── WiFi reconnection logic
+└── Configuration management (config.json)
 ```
 
 **Cloud Platform Options**:
-- **ThingSpeak**: Free tier, 8 fields, 15-second intervals - **Recommended for educational use**
-- **Blynk**: Mobile app integration
-- **Custom**: AWS IoT, Google Cloud IoT, Azure IoT Hub
-
-#### 6. System Management
-```
-system_manager.py
-├── Service monitoring & auto-restart
-├── System health checks
-├── Error logging
-└── OTA updates (optional)
-```
+- **ThingSpeak**: Free tier, 8 fields, 15-second intervals - **Recommended for government use**
+- **Custom REST API**: Direct integration with government servers
+- **MQTT** (optional): Real-time data streaming
 
 ### Software Deployment
-- **Service Management**: systemd services for auto-start
-- **Version Control**: Git repository
-- **Configuration**: YAML/JSON config files
-- **Logging**: Python logging module with rotation
+- **Boot Management**: `main.py` auto-runs on power-up
+- **Version Control**: Git repository for source code
+- **Configuration**: JSON config files stored on flash/SD card
+- **Logging**: Error logs written to SD card for debugging
+- **Updates**: Manual update via USB or OTA (over-the-air) updates via WiFi
 
 ## Data Management
 
@@ -417,37 +429,40 @@ system_manager.py
 
 | Component | Cost (INR) | Notes |
 |-----------|------------|-------|
-| Raspberry Pi 4 (4GB) | ₹5,500 | Core platform - authorized distributor |
+| Raspberry Pi Pico W | ₹600 | Core microcontroller with WiFi |
 | BME280 Sensor | ₹1,000 | Temp/humidity/pressure |
 | Weather Meter Kit (Wind + Rain) | ₹8,000 | Imported kit or ₹5,000 for local |
 | SSD1306 OLED Display | ₹800 | Local display |
-| MicroSD Card (32GB) | ₹500 | SanDisk/Samsung Class 10 |
-| Power Supply (5V/3A) | ₹800 | Official Pi adapter |
+| MicroSD Card Module + 32GB Card | ₹700 | SPI SD card reader + storage |
+| Power Supply (5V/2A) | ₹400 | Micro-USB power adapter |
 | Weather-resistant Enclosure | ₹3,000 | IP65 rated, monsoon-proof |
 | Cables, connectors, PCB | ₹1,500 | Wiring supplies, weatherproof |
 | Mounting hardware | ₹1,200 | Stainless steel pole/brackets |
-| **Subtotal** | **₹22,300** | **Base configuration** |
-| **GST (18%)** | **₹4,014** | **Tax component** |
-| **Total per Unit** | **₹26,314** | **Ready to deploy** |
+| **Subtotal** | **₹17,200** | **Base configuration** |
+| **GST (18%)** | **₹3,096** | **Tax component** |
+| **Total per Unit** | **₹20,296** | **Ready to deploy** |
+
+**Cost Savings**: ₹6,018 per unit (23% cheaper) compared to Raspberry Pi 4 version
 
 ### Optional Enhancements (Per Unit)
 | Component | Cost (INR) | Purpose |
 |-----------|------------|---------|
-| UPS HAT (battery backup) | ₹2,800 | Power outage protection |
-| Solar panel + charge controller | ₹5,000 | Off-grid remote locations |
+| LiPo Battery (3000mAh) + Charger | ₹1,200 | Battery backup for power outages |
+| Solar panel (5W) + charge controller | ₹2,500 | Off-grid remote locations (lower power needs) |
 | UV & Light sensors | ₹1,400 | Comprehensive monitoring |
-| 4G LTE USB dongle | ₹2,000 | Remote connectivity (BSNL/Jio) |
+| 4G LTE module (SIM800/SIM7600) | ₹1,500 | Remote connectivity where WiFi unavailable |
 | Air Quality Sensor (PMS5003) | ₹3,000 | Urban air monitoring |
 | Lightning detector | ₹4,500 | Storm warning system |
+| Raspberry Pi 4 upgrade | ₹5,000 | For sites needing advanced processing |
 
 ### Bulk Procurement Discount (Government Rate)
 
 | Quantity | Unit Price | Total Cost | Savings |
 |----------|------------|------------|---------|
-| 1-5 units | ₹26,314 | ₹26,314 - ₹1,31,570 | - |
-| 6-20 units | ₹24,000 | ₹1,44,000 - ₹4,80,000 | 9% discount |
-| 21-50 units | ₹22,500 | ₹4,72,500 - ₹11,25,000 | 15% discount |
-| 50+ units | ₹21,000 | Contact for quote | 20% discount |
+| 1-5 units | ₹20,296 | ₹20,296 - ₹1,01,480 | - |
+| 6-20 units | ₹18,500 | ₹1,11,000 - ₹3,70,000 | 9% discount |
+| 21-50 units | ₹17,500 | ₹3,67,500 - ₹8,75,000 | 14% discount |
+| 50+ units | ₹16,500 | Contact for quote | 19% discount |
 
 **Note**: Bulk discounts available through GeM (Government e-Marketplace) portal procurement.
 
@@ -466,23 +481,27 @@ system_manager.py
 
 | Item | Cost (INR/year) | Notes |
 |------|-----------------|-------|
-| Internet connectivity (4G) | ₹3,600 | ₹300/month BSNL/Jio |
-| Power consumption | ₹1,200 | ~20 kWh/year @ ₹6/unit |
+| Internet connectivity (WiFi/4G) | ₹3,600 | ₹300/month BSNL/Jio (if using 4G) |
+| Power consumption | ₹180 | ~3 kWh/year @ ₹6/unit (ultra-low power) |
 | Cloud service (ThingSpeak Pro) | ₹4,800 | Optional upgrade |
 | Annual calibration | ₹2,500 | Once yearly |
-| Preventive maintenance | ₹3,000 | Bi-annual service |
-| Spare parts buffer | ₹2,000 | 10% of hardware cost |
-| **Total Annual Cost** | **₹17,100** | **Operating expenses** |
+| Preventive maintenance | ₹2,500 | Bi-annual service |
+| Spare parts buffer | ₹1,500 | 7.5% of hardware cost |
+| **Total Annual Cost** | **₹15,080** | **Operating expenses** |
+
+**Power Savings**: ₹1,020/year (85% less power consumption) compared to Raspberry Pi 4
 
 ### Total Cost of Ownership (5-Year Projection)
 
 | Item | Cost (INR) | Notes |
 |------|------------|-------|
-| Hardware (per unit) | ₹26,314 | One-time |
+| Hardware (per unit) | ₹20,296 | One-time |
 | Installation (per site) | ₹16,000 | One-time |
-| Operation & Maintenance (5 years) | ₹85,500 | ₹17,100 × 5 |
-| **Total 5-Year TCO** | **₹1,27,814** | **Per weather station** |
-| **Amortized Annual Cost** | **₹25,563** | **Including all expenses** |
+| Operation & Maintenance (5 years) | ₹75,400 | ₹15,080 × 5 |
+| **Total 5-Year TCO** | **₹1,11,696** | **Per weather station** |
+| **Amortized Annual Cost** | **₹22,339** | **Including all expenses** |
+
+**5-Year TCO Savings**: ₹16,118 per station (13% cheaper) compared to Raspberry Pi 4 version
 
 ### Funding Sources & Support
 
@@ -516,17 +535,19 @@ system_manager.py
 - **Rainfall**: 0.28mm resolution per tip
 
 ### Sampling & Update Rates
-- **Sensor Polling**: 1 second (configurable)
-- **Display Update**: 2 seconds
-- **Local Logging**: Every reading (1s intervals)
-- **Cloud Upload**: 15-60 seconds (API rate limits)
-- **Web Dashboard**: Real-time via WebSocket
+- **Sensor Polling**: 10-30 seconds (configurable, optimized for microcontroller)
+- **Display Update**: 5 seconds
+- **Local Logging**: Every reading (stored to SD card)
+- **Cloud Upload**: 60-300 seconds (configurable, bandwidth optimized)
+- **Data Access**: Via cloud API or direct SD card reading
 
 ### Power Requirements
-- **Operating Voltage**: 5V DC
-- **Average Current**: 800mA (Pi 4 + sensors + display)
-- **Peak Current**: 1.2A
-- **Daily Consumption**: ~19Wh (ideal for solar)
+- **Operating Voltage**: 5V DC (via micro-USB)
+- **Average Current**: 80-120mA (Pico W + sensors + display)
+- **Peak Current**: 250mA (during WiFi transmission)
+- **Daily Consumption**: ~2.5Wh (excellent for solar/battery operation)
+- **Battery Life**: 24-48 hours on 3000mAh LiPo battery
+- **Solar Requirement**: 5W panel sufficient for continuous operation
 
 ### Environmental Operating Conditions
 - **Temperature**: -20°C to +60°C (electronics in enclosure)
@@ -551,11 +572,13 @@ system_manager.py
 
 ### Technical Advantages
 1. **Modular Design**: Easy to add/remove sensors based on specific regional needs
-2. **Multiple Access Methods**: Local + remote monitoring accessible to panchayat/district offices
+2. **Multiple Access Methods**: Local display + cloud monitoring accessible to panchayat/district offices
 3. **Open Source**: Complete control and customization, no vendor lock-in
-4. **Cost-effective**: ₹26,314 vs ₹1,00,000+ for commercial weather stations (75% cost savings)
-5. **Local Support**: Serviceable within Kerala, no dependency on foreign suppliers
-6. **Government-ready**: Compatible with NIC network, GeM procurement, IMD data standards
+4. **Highly Cost-effective**: ₹20,296 vs ₹1,00,000+ for commercial weather stations (80% cost savings)
+5. **Ultra-low Power**: 2.5Wh/day enables solar operation and extended battery backup
+6. **Local Support**: Serviceable within Kerala, no dependency on foreign suppliers
+7. **MicroPython**: Easy programming and maintenance by local technicians
+8. **Government-ready**: Compatible with NIC network, GeM procurement, IMD data standards
 
 ## Challenges & Mitigation
 
@@ -661,23 +684,27 @@ system_manager.py
 
 ## Conclusion
 
-This micro weather station proposal presents a comprehensive, government-ready solution for meteorological data collection across Kerala. The Raspberry Pi platform combined with quality sensors provides a robust foundation that is:
+This micro weather station proposal presents a comprehensive, government-ready solution for meteorological data collection across Kerala. The Raspberry Pi Pico W microcontroller platform combined with quality sensors and MicroPython programming provides a robust, cost-effective foundation that is:
 
-- **Cost-effective**: ₹26,314 per unit vs ₹1,00,000+ for commercial stations (75% savings)
+- **Highly Cost-effective**: ₹20,296 per unit vs ₹1,00,000+ for commercial stations (80% savings)
+- **Ultra-low Power**: 2.5Wh/day consumption enables solar operation and extended battery backup
+- **Easy to Program**: MicroPython simplifies development and maintenance for local technicians
+- **WiFi-enabled**: Built-in wireless connectivity for cloud data upload
 - **Locally serviceable**: No dependency on foreign suppliers, maintenance possible within Kerala
 - **Scalable**: Modular design allows deployment from 1 to 100+ stations across all 14 districts
 - **Standards-compliant**: Compatible with IMD protocols and WMO guidelines
 - **Climate-appropriate**: Designed specifically for Kerala's monsoon and coastal conditions
 
-The system's multiple data access methods (local display, web interface, cloud service) ensure accessibility from panchayat to state government levels. With proper installation and calibration against IMD reference stations, this system can provide data quality comparable to commercial weather stations.
+The system's multiple data access methods (local OLED display and cloud API) ensure accessibility from panchayat to state government levels. With proper installation and calibration against IMD reference stations, this system can provide data quality comparable to commercial weather stations at a fraction of the cost.
 
 ### Strategic Value for Kerala
 
 1. **Disaster Preparedness**: Enhanced flood and landslide early warning capabilities
 2. **Agricultural Planning**: Precise monsoon tracking for plantation crops (rubber, tea, spices)
 3. **Research Excellence**: Support for climate research at Kerala universities
-4. **Skill Development**: Technical training for local youth in IoT and meteorology
+4. **Skill Development**: Technical training for local youth in IoT, MicroPython, and meteorology
 5. **Make in India**: Potential for local assembly and manufacturing within Kerala
+6. **Energy Independence**: Low power consumption enables off-grid solar deployment in remote areas
 
 ### Recommended Deployment Strategy
 
