@@ -58,7 +58,8 @@ This document outlines the design and implementation plan for a comprehensive mi
 2. **Research Applications**: Generate reliable meteorological data for analysis and study, supporting Kerala State Disaster Management Authority (KSDMA) initiatives
 3. **Multi-platform Access**: Enable data visualization through local displays, web interfaces, and cloud services accessible to government departments
 4. **Data Persistence**: Maintain historical records through local and cloud storage for climate studies and agricultural planning
-5. **Regional Coverage**: Support Kerala's diverse climate zones from coastal to high-range regions
+5. **API Integration**: Provide RESTful API endpoints for seamless integration with third-party applications, government dashboards, and research platforms
+6. **Regional Coverage**: Support Kerala's diverse climate zones from coastal to high-range regions
 
 ## Hardware Architecture
 
